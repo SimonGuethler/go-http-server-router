@@ -6,32 +6,31 @@ import (
 	"strings"
 )
 
-// RouteHandler type for handling requests
 type RouteHandler func(conn net.Conn)
 
-// Router struct to hold route groups
 type Router struct {
 	groups map[string]*RouteGroup
-}
-
-// NewRouter creates a new router instance
-func NewRouter() *Router {
-	return &Router{
-		groups: make(map[string]*RouteGroup),
-	}
-}
-
-// RouteGroup holds routes under a common prefix
-type RouteGroup struct {
-	prefix string
 	routes map[string]map[string]RouteHandler
 }
 
-// RouteGroup registers a new route group with a callback
+func NewRouter() *Router {
+	return &Router{
+		groups: make(map[string]*RouteGroup),
+		routes: make(map[string]map[string]RouteHandler),
+	}
+}
+
+type RouteGroup struct {
+	prefix string
+	routes map[string]map[string]RouteHandler
+	router *Router
+}
+
 func (r *Router) RouteGroup(prefix string, callback func(*RouteGroup)) {
 	group := &RouteGroup{
 		prefix: prefix,
 		routes: make(map[string]map[string]RouteHandler),
+		router: r,
 	}
 	r.groups[prefix] = group
 	callback(group)
@@ -49,7 +48,6 @@ const (
 	Head    HTTPMethod = "HEAD"
 )
 
-// Route registers a new route with the given method and path
 func (rg *RouteGroup) Route(method HTTPMethod, path string, handler RouteHandler) {
 	rg.addRoute(string(method), path, handler)
 }
@@ -62,15 +60,20 @@ func (rg *RouteGroup) Patch(path string, handler RouteHandler)   { rg.Route(Patc
 func (rg *RouteGroup) Options(path string, handler RouteHandler) { rg.Route(Options, path, handler) }
 func (rg *RouteGroup) Head(path string, handler RouteHandler)    { rg.Route(Head, path, handler) }
 
-// addRoute adds a new route to the group with the given method and path
 func (rg *RouteGroup) addRoute(method, path string, handler RouteHandler) {
+	fullPath := rg.prefix + path
+
 	if _, exists := rg.routes[method]; !exists {
 		rg.routes[method] = make(map[string]RouteHandler)
 	}
 	rg.routes[method][path] = handler
+
+	if _, exists := rg.router.routes[method]; !exists {
+		rg.router.routes[method] = make(map[string]RouteHandler)
+	}
+	rg.router.routes[method][fullPath] = handler
 }
 
-// HandleRequest handles incoming requests and calls the appropriate handler
 func (r *Router) HandleRequest(conn net.Conn) {
 	defer conn.Close()
 
@@ -96,19 +99,13 @@ func (r *Router) HandleRequest(conn net.Conn) {
 	method := parts[0]
 	path := parts[1]
 
-	for _, group := range r.groups {
-		if strings.HasPrefix(path, group.prefix) {
-			pathWithoutPrefix := strings.TrimPrefix(path, group.prefix)
-			if handler, exists := group.matchRoute(method, pathWithoutPrefix); exists {
-				handler(conn)
-				return
-			}
-		}
+	if handler, exists := r.routes[method][path]; exists {
+		handler(conn)
+	} else {
+		r.notFound(conn)
 	}
-	r.notFound(conn)
 }
 
-// matchRoute matches static and dynamic routes
 func (rg *RouteGroup) matchRoute(method, path string) (RouteHandler, bool) {
 	if routes, ok := rg.routes[method]; ok {
 		// Check for exact match
@@ -125,7 +122,6 @@ func (rg *RouteGroup) matchRoute(method, path string) (RouteHandler, bool) {
 	return nil, false
 }
 
-// matchPath matches paths with dynamic segments like /{id}
 func matchPath(routePath, requestPath string) bool {
 	routeParts := strings.Split(routePath, "/")
 	requestParts := strings.Split(requestPath, "/")

@@ -14,7 +14,7 @@ func main() {
 	r := router.NewRouter()
 
 	// Register product routes
-	api.RegisterProductRoutes(r)
+	api.RegisterRoutes(r)
 
 	// Start the server
 	listener, err := net.Listen("tcp", ":8080")
