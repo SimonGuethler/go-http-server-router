@@ -1,10 +1,14 @@
 package router
 
-import "strings"
+import (
+	"errors"
+	"regexp"
+	"strings"
+)
 
 type TrieNode struct {
 	children map[string]*TrieNode
-	route    *Route
+	route    map[HTTPMethod]*Route
 }
 
 type Trie struct {
@@ -19,20 +23,43 @@ func NewTrieNode() *TrieNode {
 	return &TrieNode{children: make(map[string]*TrieNode)}
 }
 
-func (t *Trie) Insert(route *Route) {
+func (t *Trie) Insert(route *Route) error {
 	pathParts := splitPath(route.path)
 
 	if len(pathParts) > 0 {
-		insertNode(t.root, pathParts, route)
+		err := insertNode(t.root, pathParts, route)
+		if err != nil {
+			return err
+		}
 	} else {
-		t.root.route = route
+		if t.root.route != nil {
+			if _, ok := t.root.route[route.method]; ok {
+				return errors.New("route already exists")
+			} else {
+				t.root.route[route.method] = route
+			}
+		} else {
+			t.root.route = make(map[HTTPMethod]*Route)
+			t.root.route[route.method] = route
+		}
 	}
+
+	return nil
 }
 
-func insertNode(node *TrieNode, pathParts []string, route *Route) {
+func insertNode(node *TrieNode, pathParts []string, route *Route) error {
 	if len(pathParts) == 0 {
-		node.route = route
-		return
+		if node.route != nil {
+			if _, ok := node.route[route.method]; ok {
+				return errors.New("route already exists")
+			} else {
+				node.route[route.method] = route
+			}
+		} else {
+			node.route = make(map[HTTPMethod]*Route)
+			node.route[route.method] = route
+		}
+		return nil
 	}
 
 	first := pathParts[0]
@@ -41,22 +68,36 @@ func insertNode(node *TrieNode, pathParts []string, route *Route) {
 	value, ok := node.children[first]
 
 	if ok {
-		insertNode(value, pathParts, route)
+		err := insertNode(value, pathParts, route)
+		if err != nil {
+			return err
+		}
 	} else {
 		newNode := NewTrieNode()
 		node.children[first] = newNode
-		insertNode(newNode, pathParts, route)
+		err := insertNode(newNode, pathParts, route)
+		if err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
-func (t *Trie) Search(path string) *Route {
+func (t *Trie) Search(path string, method HTTPMethod) *Route {
 	pathParts := splitPath(path)
-	return searchNode(t.root, pathParts)
+	return searchNode(t.root, pathParts, method)
 }
 
-func searchNode(node *TrieNode, pathParts []string) *Route {
+func searchNode(node *TrieNode, pathParts []string, method HTTPMethod) *Route {
 	if len(pathParts) == 0 {
-		return node.route
+		if node.route != nil {
+			if route, ok := node.route[method]; ok {
+				return route
+			}
+		}
+
+		return nil
 	}
 
 	first := pathParts[0]
@@ -65,7 +106,9 @@ func searchNode(node *TrieNode, pathParts []string) *Route {
 	value, ok := node.children[first]
 
 	if ok {
-		return searchNode(value, pathParts)
+		return searchNode(value, pathParts, method)
+	} else {
+		// TODO: go path of * node
 	}
 
 	return nil
@@ -75,4 +118,13 @@ func splitPath(path string) []string {
 	path = strings.Trim(path, "/")
 	pathParts := strings.Split(path, "/")
 	return pathParts
+}
+
+func isPathParam(pathSegment string) bool {
+	re := regexp.MustCompile(`{[a-zA-Z0-9_-]+}`)
+	if re.MatchString(pathSegment) {
+		return true
+	} else {
+		return false
+	}
 }
