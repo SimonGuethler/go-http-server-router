@@ -2,59 +2,12 @@ package router
 
 import (
 	"fmt"
+	"github.com/google/uuid"
 	"log"
 	"net"
 	"regexp"
 	"strings"
 )
-
-// RouteHandler is the handler type for routes
-type RouteHandler func(conn net.Conn)
-
-// Router stores the routes
-type Router struct {
-	routes map[string]map[string]RouteHandler
-}
-
-// NewRouter creates a new router
-func NewRouter() *Router {
-	return &Router{
-		routes: make(map[string]map[string]RouteHandler),
-	}
-}
-
-// RouteGroup defines a group of routes with a common prefix
-type RouteGroup struct {
-	prefix string
-	router *Router
-}
-
-// SanitizePath trims leading/trailing slashes and ensures empty paths are treated as "/"
-func SanitizePath(path string) string {
-	if path == "" {
-		return "/"
-	}
-	return "/" + strings.Trim(path, "/")
-}
-
-// RouteGroup registers a new route group with a given prefix and allows nested sub-groups
-func (r *Router) RouteGroup(prefix string, callback func(*RouteGroup)) {
-	group := &RouteGroup{
-		prefix: SanitizePath(prefix),
-		router: r,
-	}
-	callback(group)
-}
-
-// TODO: Handle infinite nesting
-// RouteGroup creates a nested route group with a stacked prefix
-func (rg *RouteGroup) RouteGroup(prefix string, callback func(*RouteGroup)) {
-	nestedGroup := &RouteGroup{
-		prefix: SanitizePath(rg.prefix + prefix),
-		router: rg.router,
-	}
-	callback(nestedGroup)
-}
 
 type HTTPMethod string
 
@@ -68,7 +21,55 @@ const (
 	Head    HTTPMethod = "HEAD"
 )
 
-// Route handles adding a route to the router
+type Route struct {
+	id      uuid.UUID
+	method  HTTPMethod
+	path    string
+	pattern string
+	handler RouteHandler
+}
+
+type RouteHandler func(conn net.Conn)
+
+type Router struct {
+	routes map[string]map[string]RouteHandler
+}
+
+func NewRouter() *Router {
+	return &Router{
+		routes: make(map[string]map[string]RouteHandler),
+	}
+}
+
+type RouteGroup struct {
+	prefix string
+	router *Router
+}
+
+func SanitizePath(path string) string {
+	if path == "" {
+		return "/"
+	}
+	return "/" + strings.Trim(path, "/")
+}
+
+func (r *Router) RouteGroup(prefix string, callback func(*RouteGroup)) {
+	group := &RouteGroup{
+		prefix: SanitizePath(prefix),
+		router: r,
+	}
+	callback(group)
+}
+
+// TODO: Handle infinite nesting
+func (rg *RouteGroup) RouteGroup(prefix string, callback func(*RouteGroup)) {
+	nestedGroup := &RouteGroup{
+		prefix: SanitizePath(rg.prefix + prefix),
+		router: rg.router,
+	}
+	callback(nestedGroup)
+}
+
 func (rg *RouteGroup) Route(method HTTPMethod, path string, handler RouteHandler) {
 	fullPath := SanitizePath(SanitizePath(rg.prefix) + SanitizePath(path))
 
@@ -79,7 +80,6 @@ func (rg *RouteGroup) Route(method HTTPMethod, path string, handler RouteHandler
 	rg.router.routes[string(method)][fullPath] = handler
 }
 
-// Route shortcuts for HTTP methods
 func (rg *RouteGroup) Get(path string, handler RouteHandler)     { rg.Route(Get, path, handler) }
 func (rg *RouteGroup) Post(path string, handler RouteHandler)    { rg.Route(Post, path, handler) }
 func (rg *RouteGroup) Put(path string, handler RouteHandler)     { rg.Route(Put, path, handler) }
