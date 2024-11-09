@@ -7,12 +7,12 @@ import (
 )
 
 func RegisterRoutes(r *router.Router) {
-	r.RouteGroup("/", func(rootGroup *router.RouteGroup) {
+	r.RouteGroup("", func(rootGroup *router.RouteGroup) {
 		rootGroup.Get("", func(conn net.Conn) {
 			response := "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<h1>Welcome to the API</h1>"
 			conn.Write([]byte(response))
 		})
-		rootGroup.Get("/healthcheck", func(conn net.Conn) {
+		rootGroup.Get("healthcheck", func(conn net.Conn) {
 			response := "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nOK"
 			conn.Write([]byte(response))
 		})
@@ -25,6 +25,30 @@ func RegisterRoutes(r *router.Router) {
 				response := "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\n Products Cars"
 				conn.Write([]byte(response))
 			})
+		})
+	})
+	r.RouteGroup("shops", func(shopsGroup *router.RouteGroup) {
+		r.RouteGroup("shops", func(shopsGroup *router.RouteGroup) {
+			r.RouteGroup("shops", func(shopsGroup *router.RouteGroup) {
+				r.RouteGroup("shops", func(shopsGroup *router.RouteGroup) {
+					shopsGroup.Get("", func(conn net.Conn) {
+						response := "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nOK"
+						conn.Write([]byte(response))
+					})
+				})
+			})
+		})
+		shopsGroup.Post("asdf", func(conn net.Conn) {
+			response := "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nOK"
+			conn.Write([]byte(response))
+		})
+		shopsGroup.Post("qwer", func(conn net.Conn) {
+			response := "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nOK"
+			conn.Write([]byte(response))
+		})
+		shopsGroup.Post("yxcv", func(conn net.Conn) {
+			response := "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nOK"
+			conn.Write([]byte(response))
 		})
 	})
 }

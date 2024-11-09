@@ -46,6 +46,7 @@ func (r *Router) RouteGroup(prefix string, callback func(*RouteGroup)) {
 	callback(group)
 }
 
+// TODO: Handle infinite nesting
 // RouteGroup creates a nested route group with a stacked prefix
 func (rg *RouteGroup) RouteGroup(prefix string, callback func(*RouteGroup)) {
 	nestedGroup := &RouteGroup{
@@ -69,7 +70,7 @@ const (
 
 // Route handles adding a route to the router
 func (rg *RouteGroup) Route(method HTTPMethod, path string, handler RouteHandler) {
-	fullPath := SanitizePath(rg.prefix + path)
+	fullPath := SanitizePath(SanitizePath(rg.prefix) + SanitizePath(path))
 
 	// Add to Router's central route map
 	if _, exists := rg.router.routes[string(method)]; !exists {
@@ -114,12 +115,16 @@ func (r *Router) HandleRequest(conn net.Conn) {
 	method := HTTPMethod(parts[0])
 	path := SanitizePath(parts[1])
 
+	// TODO: Check if path length is valid
+
 	var contentLength int
 	for _, line := range lines {
 		if strings.HasPrefix(line, "Content-Length:") {
 			fmt.Sscanf(line, "Content-Length: %d", &contentLength)
 		}
 	}
+
+	// TODO: Check if content length is valid
 
 	if method == Post && contentLength > 0 {
 		bodyBuffer := make([]byte, contentLength)
@@ -148,6 +153,7 @@ func (r *Router) HandleRequest(conn net.Conn) {
 	r.notFound(conn)
 }
 
+// TODO: Find better handling for instant dynamic route matching and add path variable extraction
 // matchDynamicRoute tries to match dynamic routes like /{id}
 func (r *Router) matchDynamicRoute(method HTTPMethod, path string) RouteHandler {
 	// Search for routes with dynamic segments (e.g., /products/{id})
