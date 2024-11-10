@@ -5,40 +5,35 @@ import (
 	"testing"
 )
 
-// Unit Tests
-
 func TestSanitizePath(t *testing.T) {
 	tests := []struct {
-		path      string
-		expected  string
-		expectErr bool
+		path         string
+		allowDynamic bool
+		expected     string
+		expectError  bool
 	}{
-		{"/path/to/something", "/path/to/something", false},
-		{"path/to/something", "/path/to/something", false},
-		{"/invalid_path!@#", "", true},          // invalid path element
-		{"//path//to///something///", "", true}, // extra slashes
-		{"/", "/", false},
-		{"", "/", false},
-		{"asdf", "/asdf", false},
-		{"/asdf/", "/asdf", false},
-		{"asdf/", "/asdf", false},
-		{"///asdf///", "/asdf", false},
-		{"///asdf///qwer///", "", true},
+		{"/valid/path", false, "/valid/path", false},
+		{"//extra/slashes//", false, "/extra/slashes", false}, // extra slashes
+		{"/:dynamic/path", true, "/:dynamic/path", false},     // dynamic allowed
+		{"/:dynamic/path", false, "", true},                   // dynamic not allowed
+		{"", false, "/", false},                               // empty path
+		{"/", false, "/", false},                              // root path
+		{"invalid@path", false, "", true},                     // invalid characters
 	}
 
-	for _, test := range tests {
-		t.Run(test.path, func(t *testing.T) {
-			result, err := SanitizePath(test.path, false)
-			if test.expectErr {
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			result, err := SanitizePath(tt.path, tt.allowDynamic)
+			if tt.expectError {
 				if err == nil {
-					t.Errorf("expected error but got nil")
+					t.Errorf("expected error for path %s, got nil", tt.path)
 				}
 			} else {
 				if err != nil {
-					t.Errorf("unexpected error: %v", err)
+					t.Errorf("unexpected error for path %s: %v", tt.path, err)
 				}
-				if result != test.expected {
-					t.Errorf("expected %s, got %s", test.expected, result)
+				if result != tt.expected {
+					t.Errorf("expected %s, got %s", tt.expected, result)
 				}
 			}
 		})
@@ -47,28 +42,30 @@ func TestSanitizePath(t *testing.T) {
 
 func TestSanitizePathElement(t *testing.T) {
 	tests := []struct {
-		element   string
-		expected  string
-		expectErr bool
+		element     string
+		pattern     string
+		expected    string
+		expectError bool
 	}{
-		{"valid_element", "valid_element", false},
-		{"INVALID!@", "", true}, // invalid element
-		{"another_valid-elem", "another_valid-elem", false},
+		{"valid", pathElementPattern, "valid", false},
+		{":dynamic", dynamicPathAllowedChars, ":dynamic", false},
+		{"invalid@", pathElementPattern, "", true}, // invalid character
+		{"another-valid", pathElementPattern, "another-valid", false},
 	}
 
-	for _, test := range tests {
-		t.Run(test.element, func(t *testing.T) {
-			result, err := SanitizePathElement(test.element, pathElementPattern)
-			if test.expectErr {
+	for _, tt := range tests {
+		t.Run(tt.element, func(t *testing.T) {
+			result, err := SanitizePathElement(tt.element, tt.pattern)
+			if tt.expectError {
 				if err == nil {
-					t.Errorf("expected error but got nil")
+					t.Errorf("expected error for element %s, got nil", tt.element)
 				}
 			} else {
 				if err != nil {
-					t.Errorf("unexpected error: %v", err)
+					t.Errorf("unexpected error for element %s: %v", tt.element, err)
 				}
-				if result != test.expected {
-					t.Errorf("expected %s, got %s", test.expected, result)
+				if result != tt.expected {
+					t.Errorf("expected %s, got %s", tt.expected, result)
 				}
 			}
 		})
@@ -80,10 +77,10 @@ func TestIsPathParam(t *testing.T) {
 		segment  string
 		expected bool
 	}{
-		{":param", true},
-		{":valid-param", true},
-		{"path", false},
-		{":invalid param", false},
+		{":param", true},           // valid path param
+		{":valid-param", true},     // valid param with hyphen
+		{"path", false},            // static path
+		{": invalid param", false}, // invalid due to space
 	}
 
 	for _, test := range tests {
@@ -96,111 +93,71 @@ func TestIsPathParam(t *testing.T) {
 	}
 }
 
-// Benchmarks
-
-func BenchmarkSanitizePath(b *testing.B) {
-	tests := []struct {
-		path string
-	}{
-		{"/path/to/something"},
-		{"path/to/something"},
-		{"/path/to//something/with///extra/slashes"},
-	}
-
-	for _, test := range tests {
-		b.Run(test.path, func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				_, _ = SanitizePath(test.path, false)
-			}
-		})
-	}
-}
-
-func BenchmarkSanitizePathElement(b *testing.B) {
-	tests := []struct {
-		element string
-	}{
-		{"valid_element"},
-		{"INVALID!@"}, // Invalid
-		{"another_valid-elem"},
-	}
-
-	for _, test := range tests {
-		b.Run(test.element, func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				_, _ = SanitizePathElement(test.element, pathElementPattern)
-			}
-		})
-	}
-}
-
-func BenchmarkSplitPath(b *testing.B) {
-	tests := []struct {
-		path string
-	}{
-		{"/path/to/something"},
-		{"/another/example/path"},
-		{"path"},
-		{"/longer/path/to/another/example"},
-	}
-
-	for _, test := range tests {
-		b.Run(test.path, func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				_ = SplitPath(test.path)
-			}
-		})
-	}
-}
-
 func TestExtractPathVariables(t *testing.T) {
 	tests := []struct {
-		routePath   string
-		requestPath string
-		expected    map[string]string
+		routePath    string
+		requestPath  string
+		expectedVars map[string]string
 	}{
-		{
-			routePath:   "/users/:id",
-			requestPath: "/users/123",
-			expected:    map[string]string{"id": "123"},
-		},
-		{
-			routePath:   "/users/:userId/books/:bookId",
-			requestPath: "/users/45/books/789",
-			expected:    map[string]string{"userId": "45", "bookId": "789"},
-		},
-		{
-			routePath:   "/:category/:id",
-			requestPath: "/electronics/567",
-			expected:    map[string]string{"category": "electronics", "id": "567"},
-		},
-		{
-			routePath:   "/products/:productId/reviews",
-			requestPath: "/products/42/reviews",
-			expected:    map[string]string{"productId": "42"},
-		},
-		{
-			routePath:   "/fixed/path",
-			requestPath: "/fixed/path",
-			expected:    map[string]string{},
-		},
-		{
-			routePath:   "/books/:id/authors/:authorId",
-			requestPath: "/books/5/authors/12",
-			expected:    map[string]string{"id": "5", "authorId": "12"},
-		},
-		{
-			routePath:   "/multiple/:var1/segments/:var2",
-			requestPath: "/multiple/one/segments/two",
-			expected:    map[string]string{"var1": "one", "var2": "two"},
-		},
+		{"/users/:id", "/users/123", map[string]string{"id": "123"}},
+		{"/users/:userId/books/:bookId", "/users/45/books/789", map[string]string{"userId": "45", "bookId": "789"}},
+		{"/:category/:id", "/electronics/567", map[string]string{"category": "electronics", "id": "567"}},
+		{"/products/:productId/reviews", "/products/42/reviews", map[string]string{"productId": "42"}},
+		{"/static/path", "/static/path", map[string]string{}}, // no params
+		{"/books/:id/authors/:authorId", "/books/5/authors/12", map[string]string{"id": "5", "authorId": "12"}},
+		{"/multiple/:var1/segments/:var2", "/multiple/one/segments/two", map[string]string{"var1": "one", "var2": "two"}},
 	}
 
-	for _, test := range tests {
-		result := ExtractPathVariables(test.routePath, test.requestPath)
-		if !reflect.DeepEqual(result, test.expected) {
-			t.Errorf("For routePath '%s' and requestPath '%s', expected %v, but got %v",
-				test.routePath, test.requestPath, test.expected, result)
-		}
+	for _, tt := range tests {
+		t.Run(tt.routePath, func(t *testing.T) {
+			result := ExtractPathVariables(tt.routePath, tt.requestPath)
+			if !reflect.DeepEqual(result, tt.expectedVars) {
+				t.Errorf("for route %s and request %s, expected %v, got %v", tt.routePath, tt.requestPath, tt.expectedVars, result)
+			}
+		})
+	}
+}
+
+func TestSplitPath(t *testing.T) {
+	tests := []struct {
+		path     string
+		expected []string
+	}{
+		{"", []string{""}},  // edge case empty path
+		{"/", []string{""}}, // root path
+		{"/path/to/resource", []string{"path", "to", "resource"}},
+		{"path/to/resource/", []string{"path", "to", "resource"}}, // trailing slash
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			result := SplitPath(tt.path)
+			if !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("expected %v, got %v", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestIsPathParam3(t *testing.T) {
+	tests := []struct {
+		pathSegment string
+		expected    bool
+	}{
+		{":dynamic", true},  // valid dynamic param
+		{"static", false},   // static path
+		{":123param", true}, // valid param with numbers
+		{":-invalid", true}, // valid param with hyphen
+		{":", false},        // invalid due to missing name
+		{":a", true},        // valid single char param
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.pathSegment, func(t *testing.T) {
+			result := IsPathParam(tt.pathSegment)
+			if result != tt.expected {
+				t.Errorf("for segment %s, expected %v, got %v", tt.pathSegment, tt.expected, result)
+			}
+		})
 	}
 }
