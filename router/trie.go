@@ -2,7 +2,6 @@ package router
 
 import (
 	"errors"
-	"regexp"
 	"strings"
 )
 
@@ -24,7 +23,11 @@ func NewTrieNode() *TrieNode {
 }
 
 func (t *Trie) Insert(route *Route) error {
-	pathParts := splitPath(route.path)
+	path, err := SanitizePath(route.path, true)
+	if err != nil {
+		return err
+	}
+	pathParts := SplitPath(path)
 
 	if len(pathParts) > 0 {
 		err := insertNode(t.root, pathParts, route)
@@ -65,6 +68,13 @@ func insertNode(node *TrieNode, pathParts []string, route *Route) error {
 	first := pathParts[0]
 	pathParts = pathParts[1:]
 
+	isParam := IsPathParam(first)
+	if isParam {
+		first = "*"
+	} else {
+		first = strings.ToLower(first)
+	}
+
 	value, ok := node.children[first]
 
 	if ok {
@@ -84,9 +94,13 @@ func insertNode(node *TrieNode, pathParts []string, route *Route) error {
 	return nil
 }
 
-func (t *Trie) Search(path string, method HTTPMethod) *Route {
-	pathParts := splitPath(path)
-	return searchNode(t.root, pathParts, method)
+func (t *Trie) Search(path string, method HTTPMethod) (*Route, error) {
+	path, err := SanitizePath(path, false)
+	if err != nil {
+		return nil, err
+	}
+	pathParts := SplitPath(path)
+	return searchNode(t.root, pathParts, method), nil
 }
 
 func searchNode(node *TrieNode, pathParts []string, method HTTPMethod) *Route {
@@ -108,23 +122,11 @@ func searchNode(node *TrieNode, pathParts []string, method HTTPMethod) *Route {
 	if ok {
 		return searchNode(value, pathParts, method)
 	} else {
-		// TODO: go path of * node
+		value, ok := node.children["*"]
+		if ok {
+			return searchNode(value, pathParts, method)
+		}
 	}
 
 	return nil
-}
-
-func splitPath(path string) []string {
-	path = strings.Trim(path, "/")
-	pathParts := strings.Split(path, "/")
-	return pathParts
-}
-
-func isPathParam(pathSegment string) bool {
-	re := regexp.MustCompile(`{[a-zA-Z0-9_-]+}`)
-	if re.MatchString(pathSegment) {
-		return true
-	} else {
-		return false
-	}
 }
