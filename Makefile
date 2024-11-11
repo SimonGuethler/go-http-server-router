@@ -1,5 +1,8 @@
 # Makefile
 
+run:
+	go run main.go
+
 build:
 	go build
 
@@ -14,6 +17,3 @@ bench:
 
 lint:
 	golangci-lint run
-
-run:
-	go run main.go

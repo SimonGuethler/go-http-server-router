@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"go-basic-http-server/api"
-	"go-basic-http-server/router"
+	"go-http-server-router/api"
+	"go-http-server-router/router"
 	"log"
 	"net"
 )

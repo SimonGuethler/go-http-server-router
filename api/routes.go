@@ -1,8 +1,8 @@
 package api
 
 import (
-	products "go-basic-http-server/api/handlers"
-	"go-basic-http-server/router"
+	products "go-http-server-router/api/handlers"
+	"go-http-server-router/router"
 )
 
 func RegisterRoutes(r *router.Router) {

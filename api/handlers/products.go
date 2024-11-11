@@ -1,7 +1,7 @@
 package products
 
 import (
-	"go-basic-http-server/router"
+	"go-http-server-router/router"
 )
 
 // ListProducts handles the GET request to list products
