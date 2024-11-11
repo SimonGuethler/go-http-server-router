@@ -1,0 +1,9 @@
+services:
+  go-http-server-router:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: go-http-server-router
+    container_name: go-http-server-router
+    ports:
+      - "8080:8080"

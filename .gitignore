@@ -30,3 +30,7 @@ tmp/
 # IDE files
 .idea/
 .vscode/
+
+# Build folders
+dist/
+bin/
