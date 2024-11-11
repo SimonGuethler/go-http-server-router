@@ -1,16 +1,11 @@
 package router
 
 import (
-	"fmt"
 	"log"
 	"net"
-	"strings"
 )
 
-const (
-	RequestMaxSize = 4096
-	PathMaxSize    = 256
-)
+const RequestMaxSize = 4096
 
 type Route struct {
 	method  HTTPMethod
@@ -19,11 +14,11 @@ type Route struct {
 }
 
 type Context struct {
-	path       string
-	pathParams map[string]string
-	query      string
-	header     map[string]string
-	body       string
+	Path        string
+	PathParams  map[string]string
+	QueryParams map[string]string
+	Header      map[string]string
+	Body        string
 }
 
 type RouteHandler func(context Context) HttpResponse
@@ -44,7 +39,7 @@ type RouteGroup struct {
 func (r *Router) RouteGroup(routePart string, callback func(*RouteGroup)) {
 	sanitizedPath, err := SanitizePath(routePart, true)
 	if err != nil {
-		log.Panicf("Error sanitizing path: %s\nAllowed characters: %s", err, dynamicPathAllowedChars)
+		log.Panicf("Error sanitizing Path: %s\nAllowed characters: %s", err, dynamicPathAllowedChars)
 	}
 
 	group := &RouteGroup{
@@ -57,7 +52,7 @@ func (r *Router) RouteGroup(routePart string, callback func(*RouteGroup)) {
 func (rg *RouteGroup) RouteGroup(routePart string, callback func(*RouteGroup)) {
 	sanitizedPath, err := SanitizePath(routePart, true)
 	if err != nil {
-		log.Panicf("Error sanitizing path: %s\nAllowed characters: %s", err, dynamicPathAllowedChars)
+		log.Panicf("Error sanitizing Path: %s\nAllowed characters: %s", err, dynamicPathAllowedChars)
 	}
 
 	nestedGroup := &RouteGroup{
@@ -70,7 +65,7 @@ func (rg *RouteGroup) RouteGroup(routePart string, callback func(*RouteGroup)) {
 func (rg *RouteGroup) Route(method HTTPMethod, path string, handler RouteHandler) {
 	sanitizedPath, err := SanitizePath(path, true)
 	if err != nil {
-		log.Panicf("Error sanitizing path: %s\nAllowed characters: %s\nError: %s", path, dynamicPathAllowedChars, err)
+		log.Panicf("Error sanitizing Path: %s\nAllowed characters: %s\nError: %s", path, dynamicPathAllowedChars, err)
 	}
 
 	route := &Route{
@@ -103,76 +98,38 @@ func (r *Router) HandleRequest(conn net.Conn) {
 		}
 	}(conn)
 
-	buffer := make([]byte, RequestMaxSize)
-	_, err := conn.Read(buffer)
+	buffer, err := ReadRequest(conn, RequestMaxSize)
 	if err != nil {
-		if err.Error() != "EOF" {
-			log.Println("Error reading:", err)
-		}
+		log.Println("Error reading request:", err)
 		notFound(conn)
 		return
 	}
 
-	requestLine := string(buffer)
-	lines := strings.Split(requestLine, "\r\n")
-	if len(lines) < 1 {
-		return
-	}
-	requestLine = lines[0]
-	parts := strings.Fields(requestLine)
-	if len(parts) < 2 {
+	if buffer == nil || len(buffer) == 0 {
 		return
 	}
 
-	method := HTTPMethod(parts[0])
-
-	path := parts[1]
-	if len(path) > PathMaxSize {
-		log.Println("Path too long")
-		notFound(conn)
-		return
-	}
-	path, err = SanitizePath(path, false)
+	httpParser := NewHttpParser(buffer)
+	err = httpParser.Parse()
 	if err != nil {
-		log.Println("Error sanitizing path:", err)
+		log.Println("Error parsing request:", err)
 		notFound(conn)
 		return
 	}
 
-	route, err := r.routes.Search(path, method)
+	route, err := r.routes.Search(httpParser.Path, httpParser.Method)
 	if err != nil {
 		log.Println("Error searching route:", err)
 		notFound(conn)
 		return
 	}
 
-	var contentLength int
-	for _, line := range lines {
-		if strings.HasPrefix(line, "Content-Length:") {
-			_, err := fmt.Sscanf(line, "Content-Length: %d", &contentLength)
-			if err != nil {
-				log.Println("Error reading content length:", err)
-				return
-			}
-		}
-	}
-	// TODO: Parse headers
-	// TODO: Parse query string
-
 	var context Context
-	context.path = path
-
-	context.pathParams = ExtractPathVariables(route.path, path)
-
-	if contentLength > 0 && method.canHaveBody() {
-		bodyBuffer := make([]byte, contentLength)
-		_, err := conn.Read(bodyBuffer)
-		if err != nil {
-			log.Println("Error reading POST body:", err)
-			return
-		}
-		context.body = string(bodyBuffer)
-	}
+	context.Path = httpParser.Path
+	context.PathParams = ExtractPathVariables(route.path, httpParser.Path)
+	context.QueryParams = httpParser.QueryParams
+	context.Header = httpParser.Headers
+	context.Body = httpParser.Body
 
 	if handler := route.handler; handler != nil {
 		response := handler(context)

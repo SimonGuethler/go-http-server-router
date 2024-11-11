@@ -35,7 +35,7 @@ func SanitizePath(path string, allowDynamic bool) (string, error) {
 	for _, pathElement := range pathElements {
 		sanitizedElement, err := SanitizePathElement(pathElement, pathPattern)
 		if err != nil {
-			return "", errors.New("invalid path element")
+			return "", errors.New("invalid Path element")
 		}
 		sanitizedElements = append(sanitizedElements, sanitizedElement)
 	}
@@ -46,7 +46,7 @@ func SanitizePath(path string, allowDynamic bool) (string, error) {
 func SanitizePathElement(pathElement string, allowPattern string) (string, error) {
 	re := regexp.MustCompile(allowPattern)
 	if !re.MatchString(pathElement) {
-		return "", errors.New("invalid path element")
+		return "", errors.New("invalid Path element")
 	}
 	return strings.Trim(strings.ToLower(pathElement), "/"), nil
 }
@@ -60,17 +60,4 @@ func SplitPath(path string) []string {
 func IsPathParam(pathSegment string) bool {
 	re := regexp.MustCompile(dynamicPathPattern)
 	return re.MatchString(pathSegment)
-}
-
-func ExtractPathVariables(routePath string, requestPath string) map[string]string {
-	routeParts := SplitPath(routePath)
-	requestParts := SplitPath(requestPath)
-
-	var pathVariables = make(map[string]string)
-	for i, part := range routeParts {
-		if IsPathParam(part) {
-			pathVariables[part[1:]] = requestParts[i]
-		}
-	}
-	return pathVariables
 }
