@@ -1,168 +1,182 @@
 package router
 
 import (
+	"fmt"
+	"log"
 	"net"
+	"strings"
 )
 
-type HTTPMethod string
-
 const (
-	GET     HTTPMethod = "GET"
-	POST    HTTPMethod = "POST"
-	PUT     HTTPMethod = "PUT"
-	DELETE  HTTPMethod = "DELETE"
-	PATCH   HTTPMethod = "PATCH"
-	OPTIONS HTTPMethod = "OPTIONS"
-	HEAD    HTTPMethod = "HEAD"
+	RequestMaxSize = 4096
+	PathMaxSize    = 256
 )
 
 type Route struct {
-	//id      uuid.UUID
 	method  HTTPMethod
 	path    string
-	pattern string
 	handler RouteHandler
 }
 
-type RouteHandler func(conn net.Conn)
+type Context struct {
+	path       string
+	pathParams map[string]string
+	query      string
+	header     map[string]string
+	body       string
+}
+
+type RouteHandler func(context Context) HttpResponse
 
 type Router struct {
-	routes map[string]map[string]RouteHandler
+	routes *Trie
 }
 
 func NewRouter() *Router {
-	return &Router{
-		routes: make(map[string]map[string]RouteHandler),
-	}
+	return &Router{routes: NewTrie()}
 }
 
 type RouteGroup struct {
-	prefix string
+	route  string
 	router *Router
 }
 
-//func (r *Router) RouteGroup(prefix string, callback func(*RouteGroup)) {
-//	group := &RouteGroup{
-//		prefix: SanitizePath(prefix),
-//		router: r,
-//	}
-//	callback(group)
-//}
-//
-//// TODO: Handle infinite nesting
-//func (rg *RouteGroup) RouteGroup(prefix string, callback func(*RouteGroup)) {
-//	nestedGroup := &RouteGroup{
-//		prefix: SanitizePath(rg.prefix + prefix),
-//		router: rg.router,
-//	}
-//	callback(nestedGroup)
-//}
-//
-//func (rg *RouteGroup) Route(method HTTPMethod, path string, handler RouteHandler) {
-//	fullPath := SanitizePath(SanitizePath(rg.prefix) + SanitizePath(path))
-//
-//	// Add to Router's central route map
-//	if _, exists := rg.router.routes[string(method)]; !exists {
-//		rg.router.routes[string(method)] = make(map[string]RouteHandler)
-//	}
-//	rg.router.routes[string(method)][fullPath] = handler
-//}
-//
-//func (rg *RouteGroup) GET(path string, handler RouteHandler)     { rg.Route(GET, path, handler) }
-//func (rg *RouteGroup) POST(path string, handler RouteHandler)    { rg.Route(POST, path, handler) }
-//func (rg *RouteGroup) PUT(path string, handler RouteHandler)     { rg.Route(PUT, path, handler) }
-//func (rg *RouteGroup) DELETE(path string, handler RouteHandler)  { rg.Route(DELETE, path, handler) }
-//func (rg *RouteGroup) PATCH(path string, handler RouteHandler)   { rg.Route(PATCH, path, handler) }
-//func (rg *RouteGroup) OPTIONS(path string, handler RouteHandler) { rg.Route(OPTIONS, path, handler) }
-//func (rg *RouteGroup) HEAD(path string, handler RouteHandler)    { rg.Route(HEAD, path, handler) }
-//
-//func (r *Router) HandleRequest(conn net.Conn) {
-//	defer conn.Close()
-//
-//	buffer := make([]byte, 4096)
-//	_, err := conn.Read(buffer)
-//	if err != nil {
-//		if err.Error() != "EOF" {
-//			log.Println("Error reading:", err)
-//		}
-//		return
-//	}
-//
-//	requestLine := string(buffer)
-//	lines := strings.Split(requestLine, "\r\n")
-//	if len(lines) < 1 {
-//		return
-//	}
-//	requestLine = lines[0]
-//
-//	parts := strings.Fields(requestLine)
-//	if len(parts) < 2 {
-//		return
-//	}
-//
-//	method := HTTPMethod(parts[0])
-//	path := SanitizePath(parts[1])
-//
-//	// TODO: Check if path length is valid
-//
-//	var contentLength int
-//	for _, line := range lines {
-//		if strings.HasPrefix(line, "Content-Length:") {
-//			fmt.Sscanf(line, "Content-Length: %d", &contentLength)
-//		}
-//	}
-//
-//	// TODO: Check if content length is valid
-//
-//	if method == POST && contentLength > 0 {
-//		bodyBuffer := make([]byte, contentLength)
-//		_, err := conn.Read(bodyBuffer)
-//		if err != nil {
-//			log.Println("Error reading POST body:", err)
-//			return
-//		}
-//		log.Println("POST body:", string(bodyBuffer))
-//	}
-//
-//	// Match the request method and path
-//	if methodRoutes, exists := r.routes[string(method)]; exists {
-//		if handler, exists := methodRoutes[path]; exists {
-//			handler(conn)
-//			return
-//		}
-//
-//		// Handle dynamic paths like /{id}
-//		if handler := r.matchDynamicRoute(method, path); handler != nil {
-//			handler(conn)
-//			return
-//		}
-//	}
-//
-//	r.notFound(conn)
-//}
-//
-//// TODO: Find better handling for instant dynamic route matching and add path variable extraction
-//// matchDynamicRoute tries to match dynamic routes like /{id}
-//func (r *Router) matchDynamicRoute(method HTTPMethod, path string) RouteHandler {
-//	// Search for routes with dynamic segments (e.g., /products/{id})
-//	for routePath, handler := range r.routes[string(method)] {
-//		// Match dynamic segments using regex (e.g., /products/{id})
-//		re := regexp.MustCompile(`{[a-zA-Z0-9_-]+}`)
-//		if re.MatchString(routePath) {
-//			// Replace dynamic segments with a general wildcard match
-//			pattern := re.ReplaceAllString(routePath, `([^/]+)`)
-//			matched, _ := regexp.MatchString(pattern, path)
-//			if matched {
-//				return handler
-//			}
-//		}
-//	}
-//	return nil
-//}
-//
-//// notFound sends a 404 response if no route matches
-//func (r *Router) notFound(conn net.Conn) {
-//	response := "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\n\r\nPage Not Found"
-//	conn.Write([]byte(response))
-//	conn.Close()
-//}
+func (r *Router) RouteGroup(routePart string, callback func(*RouteGroup)) {
+	sanitizedPath, err := SanitizePath(routePart, true)
+	if err != nil {
+		log.Panicf("Error sanitizing path: %s\nAllowed characters: %s", err, dynamicPathAllowedChars)
+	}
+
+	group := &RouteGroup{
+		route:  sanitizedPath,
+		router: r,
+	}
+	callback(group)
+}
+
+func (rg *RouteGroup) RouteGroup(routePart string, callback func(*RouteGroup)) {
+	sanitizedPath, err := SanitizePath(routePart, true)
+	if err != nil {
+		log.Panicf("Error sanitizing path: %s\nAllowed characters: %s", err, dynamicPathAllowedChars)
+	}
+
+	nestedGroup := &RouteGroup{
+		route:  rg.route + sanitizedPath,
+		router: rg.router,
+	}
+	callback(nestedGroup)
+}
+
+func (rg *RouteGroup) Route(method HTTPMethod, path string, handler RouteHandler) {
+	sanitizedPath, err := SanitizePath(path, true)
+	if err != nil {
+		log.Panicf("Error sanitizing path: %s\nAllowed characters: %s\nError: %s", path, dynamicPathAllowedChars, err)
+	}
+
+	route := &Route{
+		method:  method,
+		path:    rg.route + sanitizedPath,
+		handler: handler,
+	}
+
+	err = rg.router.routes.Insert(route)
+	if err != nil {
+		log.Panicf("Error inserting route: %s\nError: %s", sanitizedPath, err)
+	}
+}
+
+func (rg *RouteGroup) Get(path string, handler RouteHandler)     { rg.Route(GET, path, handler) }
+func (rg *RouteGroup) Head(path string, handler RouteHandler)    { rg.Route(HEAD, path, handler) }
+func (rg *RouteGroup) Post(path string, handler RouteHandler)    { rg.Route(POST, path, handler) }
+func (rg *RouteGroup) Put(path string, handler RouteHandler)     { rg.Route(PUT, path, handler) }
+func (rg *RouteGroup) Delete(path string, handler RouteHandler)  { rg.Route(DELETE, path, handler) }
+func (rg *RouteGroup) Connect(path string, handler RouteHandler) { rg.Route(CONNECT, path, handler) }
+func (rg *RouteGroup) Options(path string, handler RouteHandler) { rg.Route(OPTIONS, path, handler) }
+func (rg *RouteGroup) Trace(path string, handler RouteHandler)   { rg.Route(TRACE, path, handler) }
+func (rg *RouteGroup) Patch(path string, handler RouteHandler)   { rg.Route(PATCH, path, handler) }
+
+func (r *Router) HandleRequest(conn net.Conn) {
+	defer func(conn net.Conn) {
+		err := conn.Close()
+		if err != nil {
+			log.Println("Error closing connection:", err)
+		}
+	}(conn)
+
+	buffer := make([]byte, RequestMaxSize)
+	_, err := conn.Read(buffer)
+	if err != nil {
+		if err.Error() != "EOF" {
+			log.Println("Error reading:", err)
+		}
+		notFound(conn)
+		return
+	}
+
+	requestLine := string(buffer)
+	lines := strings.Split(requestLine, "\r\n")
+	if len(lines) < 1 {
+		return
+	}
+	requestLine = lines[0]
+	parts := strings.Fields(requestLine)
+	if len(parts) < 2 {
+		return
+	}
+
+	method := HTTPMethod(parts[0])
+
+	path := parts[1]
+	if len(path) > PathMaxSize {
+		log.Println("Path too long")
+		notFound(conn)
+		return
+	}
+	path, err = SanitizePath(path, false)
+	if err != nil {
+		log.Println("Error sanitizing path:", err)
+		notFound(conn)
+		return
+	}
+
+	route, err := r.routes.Search(path, method)
+	if err != nil {
+		log.Println("Error searching route:", err)
+		notFound(conn)
+		return
+	}
+
+	var contentLength int
+	for _, line := range lines {
+		if strings.HasPrefix(line, "Content-Length:") {
+			_, err := fmt.Sscanf(line, "Content-Length: %d", &contentLength)
+			if err != nil {
+				log.Println("Error reading content length:", err)
+				return
+			}
+		}
+	}
+	// TODO: Parse headers
+	// TODO: Parse query string
+
+	var context Context
+	context.path = path
+
+	context.pathParams = ExtractPathVariables(route.path, path)
+
+	if contentLength > 0 && method.canHaveBody() {
+		bodyBuffer := make([]byte, contentLength)
+		_, err := conn.Read(bodyBuffer)
+		if err != nil {
+			log.Println("Error reading POST body:", err)
+			return
+		}
+		context.body = string(bodyBuffer)
+	}
+
+	if handler := route.handler; handler != nil {
+		response := handler(context)
+		response.Write(conn)
+		return
+	}
+}

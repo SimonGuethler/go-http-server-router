@@ -1,15 +1,25 @@
 package products
 
 import (
-	"net"
+	"go-basic-http-server/router"
 )
 
-func ListProducts(conn net.Conn) {
-	response := "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n[{\"name\":\"Product 1\"}, {\"name\":\"Product 2\"}]"
-	conn.Write([]byte(response))
+// ListProducts handles the GET request to list products
+func ListProducts(ctx router.Context) router.HttpResponse {
+	body := `[{"name":"Product 1"}, {"name":"Product 2"}]`
+	return router.HttpResponse{
+		StatusCode: 201,
+		Headers:    map[string]string{"Content-Type": "application/json"},
+		Body:       body,
+	}
 }
 
-func CreateProduct(conn net.Conn) {
-	response := "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\n\r\n{\"name\":\"New Product\"}"
-	conn.Write([]byte(response))
+// CreateProduct handles the POST request to create a product
+func CreateProduct(ctx router.Context) router.HttpResponse {
+	body := `{"name":"New Product"}`
+	return router.HttpResponse{
+		StatusCode: 201,
+		Headers:    map[string]string{"Content-Type": "application/json"},
+		Body:       body,
+	}
 }

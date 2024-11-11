@@ -100,7 +100,11 @@ func (t *Trie) Search(path string, method HTTPMethod) (*Route, error) {
 		return nil, err
 	}
 	pathParts := SplitPath(path)
-	return searchNode(t.root, pathParts, method), nil
+	route := searchNode(t.root, pathParts, method)
+	if route == nil {
+		return nil, errors.New("route not found")
+	}
+	return route, nil
 }
 
 func searchNode(node *TrieNode, pathParts []string, method HTTPMethod) *Route {

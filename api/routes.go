@@ -1,54 +1,58 @@
 package api
 
-//import (
-//	products "go-basic-http-server/api/handlers"
-//	"go-basic-http-server/router"
-//	"net"
-//)
-//
-//func RegisterRoutes(r *router.Router) {
-//	r.RouteGroup("", func(rootGroup *router.RouteGroup) {
-//		rootGroup.Get("", func(conn net.Conn) {
-//			response := "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<h1>Welcome to the API</h1>"
-//			conn.Write([]byte(response))
-//		})
-//		rootGroup.Get("healthcheck", func(conn net.Conn) {
-//			response := "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nOK"
-//			conn.Write([]byte(response))
-//		})
-//	})
-//	r.RouteGroup("/products", func(productsGroup *router.RouteGroup) {
-//		productsGroup.Get("/list", products.ListProducts)
-//		productsGroup.Post("/{id}", products.CreateProduct)
-//		productsGroup.RouteGroup("/cars", func(group *router.RouteGroup) {
-//			group.Get("", func(conn net.Conn) {
-//				response := "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\n Products Cars"
-//				conn.Write([]byte(response))
-//			})
-//		})
-//	})
-//	r.RouteGroup("shops", func(shopsGroup *router.RouteGroup) {
-//		r.RouteGroup("shops", func(shopsGroup *router.RouteGroup) {
-//			r.RouteGroup("shops", func(shopsGroup *router.RouteGroup) {
-//				r.RouteGroup("shops", func(shopsGroup *router.RouteGroup) {
-//					shopsGroup.Get("", func(conn net.Conn) {
-//						response := "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nOK"
-//						conn.Write([]byte(response))
-//					})
-//				})
-//			})
-//		})
-//		shopsGroup.Post("asdf", func(conn net.Conn) {
-//			response := "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nOK"
-//			conn.Write([]byte(response))
-//		})
-//		shopsGroup.Post("qwer", func(conn net.Conn) {
-//			response := "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nOK"
-//			conn.Write([]byte(response))
-//		})
-//		shopsGroup.Post("yxcv", func(conn net.Conn) {
-//			response := "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nOK"
-//			conn.Write([]byte(response))
-//		})
-//	})
-//}
+import (
+	products "go-basic-http-server/api/handlers"
+	"go-basic-http-server/router"
+)
+
+func RegisterRoutes(r *router.Router) {
+	// Root route group
+	r.RouteGroup("", func(rootGroup *router.RouteGroup) {
+		rootGroup.Get("", func(ctx router.Context) router.HttpResponse {
+			return router.HttpResponseOK("<h1>Welcome to the API</h1>")
+		})
+		rootGroup.Get("healthcheck", func(ctx router.Context) router.HttpResponse {
+			return router.HttpResponse{
+				StatusCode: 200,
+				Headers:    map[string]string{"Content-Type": "text/plain"},
+				Body:       "OK",
+			}
+		})
+	})
+
+	// Products route group
+	r.RouteGroup("/products", func(productsGroup *router.RouteGroup) {
+		productsGroup.Get("/list", products.ListProducts)
+		productsGroup.Post("/:id", products.CreateProduct)
+
+		// Nested /cars route group under /products
+		productsGroup.RouteGroup("/cars", func(carsGroup *router.RouteGroup) {
+			carsGroup.Get("", func(ctx router.Context) router.HttpResponse {
+				return router.HttpResponseOK("Products Cars")
+			})
+		})
+	})
+
+	// Shops route group
+	r.RouteGroup("/shops", func(shopsGroup *router.RouteGroup) {
+		shopsGroup.Get("", func(ctx router.Context) router.HttpResponse {
+			return router.HttpResponseOK("Shops")
+		})
+		shopsGroup.Post("asdf", func(ctx router.Context) router.HttpResponse {
+			return router.HttpResponseOK("OK")
+		})
+		shopsGroup.Post("qwer", func(ctx router.Context) router.HttpResponse {
+			return router.HttpResponseOK("OK")
+		})
+		shopsGroup.Post("yxcv", func(ctx router.Context) router.HttpResponse {
+			return router.HttpResponseOK("OK")
+		})
+		shopsGroup.RouteGroup("shops", func(shopsGroup *router.RouteGroup) {
+			shopsGroup.RouteGroup("shops", func(shopsGroup *router.RouteGroup) {
+				shopsGroup.Get("", func(ctx router.Context) router.HttpResponse {
+					return router.HttpResponseOK("Shops Shops Shops")
+				})
+			})
+		})
+	})
+}

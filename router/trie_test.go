@@ -17,31 +17,31 @@ func TestInsertAndSearchLongPaths(t *testing.T) {
 		{
 			name: "Insert and search long static paths",
 			insertRoutes: []*Route{
-				{path: "/users/profile/details", method: "GET"},
+				{path: "/users/profile/details", method: "Get"},
 				{path: "/products/category/electronics/item/123", method: "POST"},
 				{path: "/admin/dashboard/settings", method: "PUT"},
 			},
 			searchPath:    "/users/profile/details",
-			searchMethod:  "GET",
-			expectedRoute: &Route{path: "/users/profile/details", method: "GET"},
+			searchMethod:  "Get",
+			expectedRoute: &Route{path: "/users/profile/details", method: "Get"},
 		},
 		{
 			name: "Search for a non-existent route",
 			insertRoutes: []*Route{
-				{path: "/users/profile/details", method: "GET"},
+				{path: "/users/profile/details", method: "Get"},
 			},
 			searchPath:    "/nonexistent/long/path",
-			searchMethod:  "GET",
+			searchMethod:  "Get",
 			expectedRoute: nil,
 		},
 		{
 			name: "Insert and search for root path with trailing slash",
 			insertRoutes: []*Route{
-				{path: "/users/profile/details/", method: "GET"},
+				{path: "/users/profile/details/", method: "Get"},
 			},
 			searchPath:    "/users/profile/details",
-			searchMethod:  "GET",
-			expectedRoute: &Route{path: "/users/profile/details/", method: "GET"},
+			searchMethod:  "Get",
+			expectedRoute: &Route{path: "/users/profile/details/", method: "Get"},
 		},
 	}
 
@@ -73,52 +73,52 @@ func TestInsertAndSearchLongPaths(t *testing.T) {
 
 func TestHomePathEmpty(t *testing.T) {
 	trie := NewTrie()
-	route := &Route{path: "", method: "GET"}
+	route := &Route{path: "", method: "Get"}
 
 	err := trie.Insert(route)
 	if err != nil {
 		t.Errorf("Insert failed for route %v: %v", route, err)
 	}
 
-	searchResult, err := trie.Search("/", "GET")
+	searchResult, err := trie.Search("/", "Get")
 	if err != nil {
 		t.Errorf("Unexpected error while searching for '/': %v", err)
 	}
 	if !reflect.DeepEqual(searchResult, route) {
-		t.Errorf("Search result for '/' with method 'GET' expected: %+v, got: %+v", route, searchResult)
+		t.Errorf("Search result for '/' with method 'Get' expected: %+v, got: %+v", route, searchResult)
 	}
 
-	searchResult, err = trie.Search("", "GET")
+	searchResult, err = trie.Search("", "Get")
 	if err != nil {
 		t.Errorf("Unexpected error while searching for '': %v", err)
 	}
 	if !reflect.DeepEqual(searchResult, route) {
-		t.Errorf("Search result for '' with method 'GET' expected: %+v, got: %+v", route, searchResult)
+		t.Errorf("Search result for '' with method 'Get' expected: %+v, got: %+v", route, searchResult)
 	}
 }
 
 func TestHomePathSlash(t *testing.T) {
 	trie := NewTrie()
-	route := &Route{path: "/", method: "GET"}
+	route := &Route{path: "/", method: "Get"}
 
 	err := trie.Insert(route)
 	if err != nil {
 		t.Errorf("Insert failed for route %v: %v", route, err)
 	}
 
-	searchResult, err := trie.Search("/", "GET")
+	searchResult, err := trie.Search("/", "Get")
 	if err != nil {
 		t.Errorf("Unexpected error while searching for '/': %v", err)
 	}
 	if !reflect.DeepEqual(searchResult, route) {
-		t.Errorf("Search result for '/' with method 'GET' expected: %+v, got: %+v", route, searchResult)
+		t.Errorf("Search result for '/' with method 'Get' expected: %+v, got: %+v", route, searchResult)
 	}
 
-	searchResult, err = trie.Search("", "GET")
+	searchResult, err = trie.Search("", "Get")
 	if err != nil {
 		t.Errorf("Unexpected error while searching for '': %v", err)
 	}
 	if !reflect.DeepEqual(searchResult, route) {
-		t.Errorf("Search result for '/' with method 'GET' expected: %+v, got: %+v", route, searchResult)
+		t.Errorf("Search result for '/' with method 'Get' expected: %+v, got: %+v", route, searchResult)
 	}
 }
