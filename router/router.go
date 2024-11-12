@@ -24,11 +24,11 @@ type Context struct {
 type RouteHandler func(context Context) HttpResponse
 
 type Router struct {
-	routes *Trie
+	routes *RouteTree
 }
 
 func NewRouter() *Router {
-	return &Router{routes: NewTrie()}
+	return &Router{routes: NewRouteTree()}
 }
 
 type RouteGroup struct {

@@ -5,24 +5,24 @@ import (
 	"strings"
 )
 
-type TrieNode struct {
-	children map[string]*TrieNode
+type RouteTreeNode struct {
+	children map[string]*RouteTreeNode
 	route    map[HTTPMethod]*Route
 }
 
-type Trie struct {
-	root *TrieNode
+type RouteTree struct {
+	root *RouteTreeNode
 }
 
-func NewTrie() *Trie {
-	return &Trie{root: NewTrieNode()}
+func NewRouteTree() *RouteTree {
+	return &RouteTree{root: NewRouteTreeNode()}
 }
 
-func NewTrieNode() *TrieNode {
-	return &TrieNode{children: make(map[string]*TrieNode)}
+func NewRouteTreeNode() *RouteTreeNode {
+	return &RouteTreeNode{children: make(map[string]*RouteTreeNode)}
 }
 
-func (t *Trie) Insert(route *Route) error {
+func (t *RouteTree) Insert(route *Route) error {
 	path, err := SanitizePath(route.path, true)
 	if err != nil {
 		return err
@@ -50,7 +50,7 @@ func (t *Trie) Insert(route *Route) error {
 	return nil
 }
 
-func insertNode(node *TrieNode, pathParts []string, route *Route) error {
+func insertNode(node *RouteTreeNode, pathParts []string, route *Route) error {
 	if len(pathParts) == 0 {
 		if node.route != nil {
 			if _, ok := node.route[route.method]; ok {
@@ -83,7 +83,7 @@ func insertNode(node *TrieNode, pathParts []string, route *Route) error {
 			return err
 		}
 	} else {
-		newNode := NewTrieNode()
+		newNode := NewRouteTreeNode()
 		node.children[first] = newNode
 		err := insertNode(newNode, pathParts, route)
 		if err != nil {
@@ -94,7 +94,7 @@ func insertNode(node *TrieNode, pathParts []string, route *Route) error {
 	return nil
 }
 
-func (t *Trie) Search(path string, method HTTPMethod) (*Route, error) {
+func (t *RouteTree) Search(path string, method HTTPMethod) (*Route, error) {
 	path, err := SanitizePath(path, false)
 	if err != nil {
 		return nil, err
@@ -107,7 +107,7 @@ func (t *Trie) Search(path string, method HTTPMethod) (*Route, error) {
 	return route, nil
 }
 
-func searchNode(node *TrieNode, pathParts []string, method HTTPMethod) *Route {
+func searchNode(node *RouteTreeNode, pathParts []string, method HTTPMethod) *Route {
 	if len(pathParts) == 0 {
 		if node.route != nil {
 			if route, ok := node.route[method]; ok {
